@@ -1,4 +1,21 @@
 local fio = require('fio')
+local json = require("dkjson")
+
+
+
+
+local function add_error_scenario(data)
+    local filename = "./error_scenarios/scenarios.json"
+    local file = io.open(filename, "a")
+    if file then
+        -- Convert data to JSON and append to file
+        file:write("{".. json.encode(data) .. "\n}, \n")
+        file:close()
+        print("Data appended successfully in" .. filename)
+    else
+        print("Failed to open file for writing " .. filename)
+    end
+end
 
 -- File copy function
 local function copy_file(src_file, dest_file)
@@ -88,9 +105,83 @@ local function delete_directory(directory_path)
 end
 
 
+local function create_memtx()
+    local memtx_path = './memtx_dir'
+
+    if fio.path.exists(memtx_path) then
+        fio.rmtree(memtx_path)
+    end
+    fio.mkdir(memtx_path)
+
+    local box_cfg = {
+        checkpoint_count = 2,
+        memtx_use_mvcc_engine = true,
+        memtx_dir = memtx_path,
+    }
+
+    if WITHOUT_BEST_EFFORT ~= "true" then
+        box_cfg.txn_isolation = 'best-effort'
+    end
+
+    box.cfg(box_cfg)
+end
+
+local function clear_dirs_for_all_replicas()
+    local base_dir = fio.abspath('./replicas_dirs')
+    if fio.path.exists(base_dir) then
+        fio.rmtree(base_dir)
+    end
+end
+
+
+--- Utils functions for debugging
+local function ensure_replica_dirs_exist()
+    local replica_dirs_path = fio.abspath('./replicas_dirs')
+
+    if not fio.path.exists(replica_dirs_path) then
+        local ok, err = fio.mkdir(replica_dirs_path)
+        if not ok then
+            error(string.format("Failed to create directory '%s': %s", replica_dirs_path, err))
+        end
+        print(string.format("Directory '%s' successfully created.", replica_dirs_path))
+    elseif not fio.path.is_dir(replica_dirs_path) then
+        error(string.format("Path '%s' exists but is not a directory", replica_dirs_path))
+    end
+end
+
+local function create_dirs_for_replica(replica_id)
+    ensure_replica_dirs_exist()
+    local base_dir = fio.abspath(string.format('./replicas_dirs/replica_%d', replica_id))
+    local memtx_dir = fio.pathjoin(base_dir, './memtx_dir')
+    local wal_dir = fio.pathjoin(base_dir, './wal_dir')
+    local log_dir = fio.pathjoin(base_dir, './log_dir')
+
+    fio.rmtree(memtx_dir)
+    fio.rmtree(wal_dir)
+    fio.rmtree(log_dir)
+
+    if not fio.path.exists(base_dir) then
+        fio.mkdir(base_dir)
+    end
+    if not fio.path.exists(memtx_dir) then
+        fio.mkdir(memtx_dir)
+    end
+    if not fio.path.exists(wal_dir) then
+        fio.mkdir(wal_dir)
+    end
+    if not fio.path.exists(log_dir) then
+        fio.mkdir(log_dir)
+    end
+
+    return memtx_dir, wal_dir, log_dir
+end
 
 return {
     copy_file = copy_file,
     delete_file = delete_file,
-    delete_directory = delete_directory
+    delete_directory = delete_directory,
+    create_memtx = create_memtx,
+    clear_dirs_for_all_replicas = clear_dirs_for_all_replicas,
+    create_dirs_for_replica = create_dirs_for_replica,
+    add_error_scenario = add_error_scenario
 }

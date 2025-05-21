@@ -1,5 +1,3 @@
-local net_box = require('net.box')
-
 local function is_follower(conn)
     return conn:call('box.info').ro == true
 end
@@ -47,15 +45,19 @@ local function check_node(node)
 end
 
 local function get_initial_replication(nodes)
+
     local initial_replication = {}
     for _, node in ipairs(nodes) do
         local replication = node:exec(function()
             return box.cfg.replication
         end)
         initial_replication[node.alias] = replication
+
     end
+
     return initial_replication
 end
+
 
 local function get_random_node(nodes, timeout)
     if not nodes or #nodes == 0 then
@@ -89,6 +91,32 @@ local function get_leader(servers)
     return nil 
 end
 
+-- Generates all combinations of size k from arp table elements
+local function combinations(arr, k)
+    local result = {}
+    local n = #arr
+    
+    -- Auxiliary recursive function
+    local function helper(start, current_comb)
+        if #current_comb == k then
+            table.insert(result, current_comb)
+            return
+        end
+        
+        for i = start, n do
+            local new_comb = {}
+            -- Copy the existing combination
+            for _, v in ipairs(current_comb) do table.insert(new_comb, v) end
+            -- Adding a new element
+            table.insert(new_comb, arr[i])
+            -- Continue recursively
+            helper(i + 1, new_comb)
+        end
+    end
+    
+    helper(1, {})
+    return result
+end
 
 
 return {
@@ -99,6 +127,7 @@ return {
     check_node = check_node,
     get_initial_replication = get_initial_replication,
     get_random_node = get_random_node,
-    get_leader = get_leader
+    get_leader = get_leader,
+    combinations = combinations
 
 }

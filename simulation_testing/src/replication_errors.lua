@@ -1,15 +1,16 @@
 local is_node_alive_by_id = require("crash_functions").is_node_alive_by_id
 local connection_exists = require("crash_functions").connection_exists
 
+local monitor_config = {
+    leader_absent_time = 60, 
+    max_terms_change_by_period = 3,
+    terms_change_period = 20,
+    check_interval = 2,
+}
+
 local function monitor_replication(cg)
     local fiber = require('fiber')
 
-    local monitor_config = {
-        leader_absent_time = 10, 
-        max_terms_change_by_period = 5,
-        terms_change_period = 10,
-        check_interval = 2,
-    }
 
     local state = {
         term_changes = {}, 
@@ -32,6 +33,9 @@ local function monitor_replication(cg)
                 end)
                 
                 if not ok_inner then
+                    if is_node_alive_by_id(id) then
+                       table.insert(problems, '[replica_'..tostring(id)..'] Is NOT CRASHED but is UHEALTHY: Check replica_'..tostring(id)..'.log')
+                    end
                     goto continue
                 end
 
@@ -99,7 +103,7 @@ local function monitor_replication(cg)
 
             ----------------------------------------------------------------------------
             for _, leader in ipairs(leaders) do
-                log_info("[REPLICATION MONITOR][CLUSTER] Leader: "..leader)
+                LogInfo("[REPLICATION MONITOR][CLUSTER] Leader: "..leader)
             end
 
             if #leaders == 0 then
@@ -114,17 +118,17 @@ local function monitor_replication(cg)
                 table.insert(problems, '[REPLICATION MONITOR][CLUSTER] Multiple leaders detected')
             end
 
-            log_info('[REPLICATION MONITOR][CLUSTER] Detected '..tostring(#problems)..' Problems:')
+            LogInfo('[REPLICATION MONITOR][CLUSTER] Detected '..tostring(#problems)..' Problems:')
 
             if #problems > 0 then
                 for _, problem in ipairs(problems) do
-                    log_info('[REPLICATION MONITOR] '.. problem)
+                    LogError('[REPLICATION MONITOR] '.. problem)
                 end
             end
         end)
 
         if not ok then
-            log_error('[REPLICATION MONITOR]', err)
+            LogError('[REPLICATION MONITOR]', err)
         end
 
         fiber.sleep(monitor_config.check_interval)
@@ -132,5 +136,6 @@ local function monitor_replication(cg)
 end
 
 return {
-    run_replication_monitor = monitor_replication
+    run_replication_monitor = monitor_replication,
+    monitor_config = monitor_config,
 }

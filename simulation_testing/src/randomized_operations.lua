@@ -1,10 +1,5 @@
-local t = require('luatest')
-local cluster = require('luatest.replica_set')
-local server = require('luatest.server')
 local fiber = require('fiber')
-local net_box = require('net.box')
 local tools = require("tools")
-local crash_functions = require("crash_functions")
 
 
 
@@ -54,7 +49,12 @@ local function execute_db_operation(node, space_name, operation)
                 local space = box.space[space_name]
                 local res
 
-                box.begin({txn_isolation = 'linearizable'})
+                local txn_opts = {}
+                if WITHOUT_LINEARIZABLE ~= "true" then
+                    txn_opts = { txn_isolation = 'linearizable' }
+                end
+
+                box.begin(txn_opts)
                 if operation_type == "select" then
                     res = space:select(operation_args[1])
                 elseif operation_type == "insert" then
